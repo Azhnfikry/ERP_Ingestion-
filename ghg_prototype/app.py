@@ -18,7 +18,9 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(24)
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get("DATABASE_URL", "").split("?channel_binding")[0]
+if "?" in DATABASE_URL and "channel_binding" in DATABASE_URL:
+    DATABASE_URL = DATABASE_URL.split("channel_binding")[0].rstrip("&")
 
 
 def _get_db():
@@ -88,7 +90,19 @@ def _save_to_db(sid, df):
         conn.commit()
 
 
-_init_db()
+_db_ready = False
+
+
+@app.before_request
+def _ensure_db():
+    global _db_ready
+    if not _db_ready:
+        try:
+            _init_db()
+            _db_ready = True
+        except Exception as e:
+            app.logger.error("DB init error: %s", e)
+
 
 UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), "ghg_uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
