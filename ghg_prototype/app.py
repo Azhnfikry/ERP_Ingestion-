@@ -3,6 +3,7 @@ import io
 import uuid
 import json
 import tempfile
+import urllib.parse
 import pandas as pd
 from flask import (
     Flask, request, redirect, url_for, render_template,
@@ -10,60 +11,74 @@ from flask import (
 )
 from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
-import psycopg2
-from psycopg2.extras import execute_values
+import pg8000.dbapi
 
 load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(24)
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "").split("?channel_binding")[0]
-if "?" in DATABASE_URL and "channel_binding" in DATABASE_URL:
-    DATABASE_URL = DATABASE_URL.split("channel_binding")[0].rstrip("&")
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 
 def _get_db():
-    return psycopg2.connect(DATABASE_URL)
+    p = urllib.parse.urlparse(DATABASE_URL)
+    return pg8000.dbapi.connect(
+        host=p.hostname,
+        port=p.port or 5432,
+        database=p.path.lstrip("/"),
+        user=p.username,
+        password=p.password,
+        ssl_context=True,
+    )
 
 
 def _init_db():
-    with _get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS ghg_emissions (
-                    id          SERIAL PRIMARY KEY,
-                    session_id  TEXT,
-                    uploaded_at TIMESTAMPTZ DEFAULT NOW(),
-                    source      TEXT,
-                    doc_ref     TEXT,
-                    date        TEXT,
-                    vendor      TEXT,
-                    description TEXT,
-                    scope       TEXT,
-                    ghg_category TEXT,
-                    qty         NUMERIC,
-                    unit        TEXT,
-                    ef_val      NUMERIC,
-                    kg_co2e     NUMERIC,
-                    t_co2e      NUMERIC,
-                    spend_myr   NUMERIC,
-                    plant       TEXT
-                )
-            """)
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS ghg_sessions (
-                    session_id TEXT PRIMARY KEY,
-                    data       TEXT,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
-        conn.commit()
+    conn = _get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ghg_emissions (
+            id          SERIAL PRIMARY KEY,
+            session_id  TEXT,
+            uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+            source      TEXT,
+            doc_ref     TEXT,
+            date        TEXT,
+            vendor      TEXT,
+            description TEXT,
+            scope       TEXT,
+            ghg_category TEXT,
+            qty         NUMERIC,
+            unit        TEXT,
+            ef_val      NUMERIC,
+            kg_co2e     NUMERIC,
+            t_co2e      NUMERIC,
+            spend_myr   NUMERIC,
+            plant       TEXT
+        )
+    """)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ghg_sessions (
+            session_id TEXT PRIMARY KEY,
+            data       TEXT,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    conn.commit()
+    conn.close()
 
 
 def _save_to_db(sid, df):
-    rows = [
-        (
+    conn = _get_db()
+    cur = conn.cursor()
+    for _, r in df.iterrows():
+        cur.execute("""
+            INSERT INTO ghg_emissions
+                (session_id, source, doc_ref, date, vendor, description,
+                 scope, ghg_category, qty, unit, ef_val, kg_co2e, t_co2e,
+                 spend_myr, plant)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
             sid,
             r.get("Source"), r.get("Doc_Ref"), str(r.get("Date") or ""),
             r.get("Vendor"), r.get("Description"), r.get("Scope"),
@@ -75,19 +90,9 @@ def _save_to_db(sid, df):
             float(r["tCO2e"]) if r.get("tCO2e") is not None else None,
             float(r["Spend_MYR"]) if r.get("Spend_MYR") is not None else None,
             r.get("Plant"),
-        )
-        for _, r in df.iterrows()
-    ]
-    with _get_db() as conn:
-        with conn.cursor() as cur:
-            execute_values(cur, """
-                INSERT INTO ghg_emissions
-                    (session_id, source, doc_ref, date, vendor, description,
-                     scope, ghg_category, qty, unit, ef_val, kg_co2e, t_co2e,
-                     spend_myr, plant)
-                VALUES %s
-            """, rows)
-        conn.commit()
+        ))
+    conn.commit()
+    conn.close()
 
 
 _db_ready = False
@@ -504,25 +509,26 @@ def process_commuting(path):
 # ── SESSION STORAGE (Neon DB-backed) ─────────────────────────────────────────
 def save_session(sid, df):
     data = df.to_json(orient="records")
-    with _get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO ghg_sessions (session_id, data)
-                VALUES (%s, %s)
-                ON CONFLICT (session_id) DO UPDATE SET data = EXCLUDED.data
-            """, (sid, data))
-        conn.commit()
+    conn = _get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO ghg_sessions (session_id, data)
+        VALUES (%s, %s)
+        ON CONFLICT (session_id) DO UPDATE SET data = EXCLUDED.data
+    """, (sid, data))
+    conn.commit()
+    conn.close()
 
 
 def load_session(sid):
-    with _get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT data FROM ghg_sessions WHERE session_id = %s", (sid,))
-            row = cur.fetchone()
+    conn = _get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT data FROM ghg_sessions WHERE session_id = %s", (sid,))
+    row = cur.fetchone()
+    conn.close()
     if not row:
         return None
     df = pd.read_json(row[0], orient="records")
-    # Restore column order and ensure all expected columns exist
     for col in OUTPUT_COLS:
         if col not in df.columns:
             df[col] = None
