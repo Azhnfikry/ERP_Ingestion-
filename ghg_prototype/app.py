@@ -1,6 +1,5 @@
 import os
 import io
-import pickle
 import uuid
 import json
 import tempfile
@@ -17,7 +16,7 @@ from psycopg2.extras import execute_values
 load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+app.secret_key = os.environ.get("SECRET_KEY") or os.urandom(24)
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -48,6 +47,13 @@ def _init_db():
                     t_co2e      NUMERIC,
                     spend_myr   NUMERIC,
                     plant       TEXT
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS ghg_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    data       TEXT,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
         conn.commit()
@@ -84,7 +90,7 @@ def _save_to_db(sid, df):
 
 _init_db()
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
+UPLOAD_FOLDER = os.path.join(tempfile.gettempdir(), "ghg_uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ── CONFIG ────────────────────────────────────────────────────────────────────
@@ -481,22 +487,32 @@ def process_commuting(path):
     return records, None
 
 
-# ── SESSION STORAGE ───────────────────────────────────────────────────────────
-def _session_path(sid):
-    return os.path.join(tempfile.gettempdir(), f"ghg_{sid}.pkl")
-
-
+# ── SESSION STORAGE (Neon DB-backed) ─────────────────────────────────────────
 def save_session(sid, df):
-    with open(_session_path(sid), "wb") as f:
-        pickle.dump(df, f)
+    data = df.to_json(orient="records")
+    with _get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO ghg_sessions (session_id, data)
+                VALUES (%s, %s)
+                ON CONFLICT (session_id) DO UPDATE SET data = EXCLUDED.data
+            """, (sid, data))
+        conn.commit()
 
 
 def load_session(sid):
-    path = _session_path(sid)
-    if not os.path.exists(path):
+    with _get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT data FROM ghg_sessions WHERE session_id = %s", (sid,))
+            row = cur.fetchone()
+    if not row:
         return None
-    with open(path, "rb") as f:
-        return pickle.load(f)
+    df = pd.read_json(row[0], orient="records")
+    # Restore column order and ensure all expected columns exist
+    for col in OUTPUT_COLS:
+        if col not in df.columns:
+            df[col] = None
+    return df[OUTPUT_COLS]
 
 
 # ── ROUTES ────────────────────────────────────────────────────────────────────
