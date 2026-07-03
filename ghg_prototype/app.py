@@ -10,9 +10,79 @@ from flask import (
     session, jsonify, send_file
 )
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+import psycopg2
+from psycopg2.extras import execute_values
+
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+
+def _get_db():
+    return psycopg2.connect(DATABASE_URL)
+
+
+def _init_db():
+    with _get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS ghg_emissions (
+                    id          SERIAL PRIMARY KEY,
+                    session_id  TEXT,
+                    uploaded_at TIMESTAMPTZ DEFAULT NOW(),
+                    source      TEXT,
+                    doc_ref     TEXT,
+                    date        TEXT,
+                    vendor      TEXT,
+                    description TEXT,
+                    scope       TEXT,
+                    ghg_category TEXT,
+                    qty         NUMERIC,
+                    unit        TEXT,
+                    ef_val      NUMERIC,
+                    kg_co2e     NUMERIC,
+                    t_co2e      NUMERIC,
+                    spend_myr   NUMERIC,
+                    plant       TEXT
+                )
+            """)
+        conn.commit()
+
+
+def _save_to_db(sid, df):
+    rows = [
+        (
+            sid,
+            r.get("Source"), r.get("Doc_Ref"), str(r.get("Date") or ""),
+            r.get("Vendor"), r.get("Description"), r.get("Scope"),
+            r.get("GHG_Category"),
+            float(r["Qty"]) if r.get("Qty") is not None else None,
+            r.get("Unit"),
+            float(r["EF_val"]) if r.get("EF_val") is not None else None,
+            float(r["kgCO2e"]) if r.get("kgCO2e") is not None else None,
+            float(r["tCO2e"]) if r.get("tCO2e") is not None else None,
+            float(r["Spend_MYR"]) if r.get("Spend_MYR") is not None else None,
+            r.get("Plant"),
+        )
+        for _, r in df.iterrows()
+    ]
+    with _get_db() as conn:
+        with conn.cursor() as cur:
+            execute_values(cur, """
+                INSERT INTO ghg_emissions
+                    (session_id, source, doc_ref, date, vendor, description,
+                     scope, ghg_category, qty, unit, ef_val, kg_co2e, t_co2e,
+                     spend_myr, plant)
+                VALUES %s
+            """, rows)
+        conn.commit()
+
+
+_init_db()
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -473,6 +543,10 @@ def process():
 
     sid = str(uuid.uuid4())
     save_session(sid, df)
+    try:
+        _save_to_db(sid, df)
+    except Exception as db_err:
+        errors.append(f"DB save warning: {db_err}")
     session["ghg_sid"] = sid
 
     if errors:

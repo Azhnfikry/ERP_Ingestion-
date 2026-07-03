@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 *.pyd
 .env
+ghg_prototype/.env
 .venv/
 venv/
 ghg_prototype/uploads/*
