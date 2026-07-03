@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+ghg_prototype/uploads/*
+ghg_prototype/outputs/*
+!ghg_prototype/uploads/.gitkeep
+!ghg_prototype/outputs/.gitkeep

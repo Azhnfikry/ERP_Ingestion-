@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CarbonIQ — Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────────── */
+    header {
+      background: #1e293b;
+      border-bottom: 1px solid #334155;
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, #22c55e, #3b82f6);
+      border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    .header-title { font-size: 1.1rem; font-weight: 700; color: #f8fafc; }
+    .header-sub   { font-size: 0.78rem; color: #64748b; }
+
+    .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .btn {
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.2s, transform 0.1s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:hover { opacity: 0.88; transform: translateY(-1px); }
+
+    .btn-secondary {
+      background: #334155;
+      color: #e2e8f0;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+    }
+
+    /* ── Warnings ────────────────────────────────────────────────────────────── */
+    .warnings {
+      background: #451a03;
+      border-left: 4px solid #f59e0b;
+      color: #fcd34d;
+      padding: 12px 20px;
+      font-size: 0.85rem;
+      margin: 16px 24px;
+      border-radius: 6px;
+    }
+
+    /* ── Main layout ────────────────────────────────────────────────────────── */
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 24px 60px;
+    }
+
+    /* ── Summary cards ──────────────────────────────────────────────────────── */
+    .cards-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 860px) { .cards-row { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .cards-row { grid-template-columns: 1fr; } }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 20px 22px;
+    }
+
+    .card-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+
+    .card-value {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .card-unit { font-size: 0.78rem; color: #64748b; }
+
+    .card-total  .card-value { color: #f8fafc; }
+    .card-scope1 .card-value { color: #22c55e; }
+    .card-scope2 .card-value { color: #60a5fa; }
+    .card-scope3 .card-value { color: #a78bfa; }
+
+    .card-total  { border-top: 3px solid #475569; }
+    .card-scope1 { border-top: 3px solid #22c55e; }
+    .card-scope2 { border-top: 3px solid #3b82f6; }
+    .card-scope3 { border-top: 3px solid #a855f7; }
+
+    /* ── Charts row ─────────────────────────────────────────────────────────── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+
+    .chart-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .chart-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+
+    .chart-wrap { position: relative; }
+
+    /* ── Table section ──────────────────────────────────────────────────────── */
+    .section-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 28px;
+    }
+
+    .section-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .filter-row { display: flex; align-items: center; gap: 10px; }
+
+    select, .search-input {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-size: 0.84rem;
+      outline: none;
+    }
+
+    select:focus, .search-input:focus { border-color: #3b82f6; }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    thead th {
+      background: #0f172a;
+      color: #64748b;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 10px 14px;
+      text-align: left;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+    }
+
+    tbody tr:nth-child(even) { background: #162032; }
+    tbody tr:hover { background: #1a2a40; }
+
+    tbody td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #1e293b;
+      white-space: nowrap;
+      max-width: 220px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .badge-s1    { background: #052e16; color: #4ade80; }
+    .badge-s2    { background: #0c1a2e; color: #60a5fa; }
+    .badge-s3    { background: #1e0a3c; color: #c084fc; }
+    .badge-s3-1  { background: #1e0a3c; color: #c084fc; }
+    .badge-s3-5  { background: #1a0e38; color: #a78bfa; }
+    .badge-s3-7  { background: #12123a; color: #818cf8; }
+    .badge-s3-9  { background: #0f172e; color: #6ee7b7; }
+    .badge-s3-11 { background: #0c1f1c; color: #34d399; }
+    .badge-unk   { background: #1c1917; color: #a8a29e; }
+
+    /* ── Scope 3 breakdown strip ─────────────────────────────────────────── */
+    .s3-breakdown {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 900px) { .s3-breakdown { grid-template-columns: repeat(3, 1fr); } }
+    @media (max-width: 560px) { .s3-breakdown { grid-template-columns: repeat(2, 1fr); } }
+
+    .s3-tile {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .s3-tile:hover { border-color: #a855f7; background: #1a1236; }
+
+    .s3-tile-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+
+    .s3-tile-value {
+      font-size: 1.3rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 3px;
+    }
+
+    .s3-tile-sub { font-size: 0.72rem; color: #64748b; }
+
+    /* ── Pagination ─────────────────────────────────────────────────────────── */
+    .pagination {
+      padding: 14px 20px;
+      border-top: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pag-info { font-size: 0.8rem; color: #64748b; }
+
+    .pag-controls { display: flex; gap: 6px; }
+
+    .pag-btn {
+      background: #334155;
+      color: #e2e8f0;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .pag-btn:hover:not(:disabled) { background: #475569; }
+    .pag-btn:disabled { opacity: 0.35; cursor: default; }
+    .pag-btn.active { background: #3b82f6; color: white; }
+
+    /* ── Loader ─────────────────────────────────────────────────────────────── */
+    #table-loader {
+      text-align: center;
+      padding: 40px;
+      color: #64748b;
+    }
+
+    .spinner-sm {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 3px solid #334155;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── No-data state ──────────────────────────────────────────────────────── */
+    .no-data {
+      text-align: center;
+      padding: 50px 20px;
+      color: #475569;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="logo-icon">♻</div>
+    <div>
+      <div class="header-title">CarbonIQ</div>
+      <div class="header-sub">Results Dashboard — FY {{ 2025 }}</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <a href="/export" class="btn btn-primary">⬇ Export to Excel</a>
+    <a href="/" class="btn btn-secondary">↩ Process New Files</a>
+  </div>
+</header>
+
+{% if warnings %}
+<div class="warnings">
+  <strong>⚠ Partial processing warnings:</strong>
+  <ul style="margin-top:6px;padding-left:18px">
+    {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<main>
+
+  <!-- ── Summary cards ─────────────────────────────────────────────────── -->
+  <div class="cards-row">
+    <div class="card card-total">
+      <div class="card-label">Total Emissions</div>
+      <div class="card-value">{{ "{:,.1f}".format(total) }}</div>
+      <div class="card-unit">tCO₂e — All Scopes</div>
+    </div>
+    <div class="card card-scope1">
+      <div class="card-label">Scope 1</div>
+      <div class="card-value">{{ "{:,.1f}".format(scope1) }}</div>
+      <div class="card-unit">tCO₂e — Direct</div>
+    </div>
+    <div class="card card-scope2">
+      <div class="card-label">Scope 2</div>
+      <div class="card-value">{{ "{:,.1f}".format(scope2) }}</div>
+      <div class="card-unit">tCO₂e — Electricity</div>
+    </div>
+    <div class="card card-scope3">
+      <div class="card-label">Scope 3</div>
+      <div class="card-value">{{ "{:,.1f}".format(scope3) }}</div>
+      <div class="card-unit">tCO₂e — All Categories</div>
+    </div>
+  </div>
+
+  <!-- ── Scope 3 category breakdown ───────────────────────────────────── -->
+  <div class="s3-breakdown" id="s3-breakdown" style="display:none"></div>
+
+  <!-- ── Charts ────────────────────────────────────────────────────────── -->
+  <div class="charts-row">
+
+    <div class="chart-card">
+      <div class="chart-title">Emission Breakdown by Scope</div>
+      <div class="chart-wrap" style="height:320px">
+        <canvas id="donutChart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-title">Top 10 Suppliers by Spend (MYR) — Pareto</div>
+      <div class="chart-wrap" style="height:320px">
+        <canvas id="barChart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Data table ─────────────────────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-header">
+      <span class="section-title">Classified Records &nbsp;<span id="record-count-label" style="color:#475569;font-weight:400;font-size:0.8rem"></span></span>
+      <div class="filter-row">
+        <select id="scope-filter" onchange="applyFilter()">
+          <option value="">All Scopes</option>
+          <option value="Scope 1">Scope 1 — Direct</option>
+          <option value="Scope 2">Scope 2 — Electricity</option>
+          <optgroup label="Scope 3 Categories">
+            <option value="Scope 3">Scope 3 — All</option>
+            <option value="Scope 3 Cat 1 — Purchased Goods">S3 Cat 1 — Purchased Goods</option>
+            <option value="Scope 3 Cat 5 — Waste / Water">S3 Cat 5 — Waste / Water</option>
+            <option value="Scope 3 Cat 7 — Employee Commuting">S3 Cat 7 — Employee Commuting</option>
+            <option value="Scope 3 Cat 9 — Downstream Transport">S3 Cat 9 — Downstream Transport</option>
+            <option value="Scope 3 Cat 11 — Use of Sold Products">S3 Cat 11 — Use of Sold Products</option>
+          </optgroup>
+          <option value="Unclassified">Unclassified</option>
+        </select>
+        <input class="search-input" id="vendor-search" type="text" placeholder="Search vendor / description…" oninput="applyFilter()" style="width:220px" />
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <div id="table-loader"><span class="spinner-sm"></span> Loading records…</div>
+      <table id="records-table" style="display:none">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>Vendor</th>
+            <th>Description</th>
+            <th>Scope</th>
+            <th>GHG Category</th>
+            <th>Qty</th>
+            <th>Unit</th>
+            <th style="text-align:right">kgCO₂e</th>
+            <th style="text-align:right">tCO₂e</th>
+          </tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="pag-row" style="display:none">
+      <span class="pag-info" id="pag-info"></span>
+      <div class="pag-controls" id="pag-controls"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  // ── Injected chart data ──────────────────────────────────────────────────
+  const CHART_DATA = {{ chart_data | safe }};
+
+  // ── Donut chart ──────────────────────────────────────────────────────────
+  (function () {
+    const d = CHART_DATA.donut;
+    if (!d.labels.length) return;
+    new Chart(document.getElementById('donutChart'), {
+      type: 'doughnut',
+      data: {
+        labels: d.labels,
+        datasets: [{
+          data: d.values,
+          backgroundColor: d.colours,
+          borderColor: '#0f172a',
+          borderWidth: 3,
+          hoverOffset: 8,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: '#94a3b8',
+              font: { size: 11 },
+              padding: 14,
+              boxWidth: 12,
+              boxHeight: 12,
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()} tCO₂e`
+            }
+          }
+        },
+        cutout: '62%',
+      }
+    });
+  })();
+
+  // ── Bar chart ─────────────────────────────────────────────────────────────
+  (function () {
+    const b = CHART_DATA.suppliers;
+    if (!b.labels.length) {
+      const el = document.getElementById('barChart');
+      el.parentElement.innerHTML = '<div class="no-data">No PO supplier data available.</div>';
+      return;
+    }
+    new Chart(document.getElementById('barChart'), {
+      type: 'bar',
+      data: {
+        labels: b.labels,
+        datasets: [{
+          label: 'Spend (MYR)',
+          data: b.values,
+          backgroundColor: b.colours,
+          borderRadius: 5,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: ctx => ` MYR ${ctx.parsed.x.toLocaleString('en-MY', { minimumFractionDigits: 2 })}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: '#1e293b' },
+            ticks: {
+              color: '#64748b',
+              font: { size: 11 },
+              callback: v => 'RM ' + (v >= 1e6 ? (v/1e6).toFixed(1)+'M' : (v >= 1e3 ? (v/1e3).toFixed(0)+'k' : v))
+            }
+          },
+          y: {
+            grid: { display: false },
+            ticks: {
+              color: '#cbd5e1',
+              font: { size: 11 },
+              callback: function(val) {
+                const label = this.getLabelForValue(val);
+                return label.length > 28 ? label.slice(0, 27) + '…' : label;
+              }
+            }
+          }
+        }
+      }
+    });
+  })();
+
+  // ── Table: fetch + paginate ───────────────────────────────────────────────
+  let allRecords = [];
+  let filteredRecords = [];
+  const PAGE_SIZE = 50;
+  let currentPage = 1;
+
+  function scopeBadge(scope, ghgCat) {
+    if (!scope) return '<span class="badge badge-unk">—</span>';
+    const s = scope.toUpperCase();
+    if (s.includes('SCOPE 1')) return `<span class="badge badge-s1">Scope 1</span>`;
+    if (s.includes('SCOPE 2')) return `<span class="badge badge-s2">Scope 2</span>`;
+    if (s.includes('SCOPE 3')) {
+      const m = (ghgCat || '').match(/Cat\s*(\d+)/i);
+      if (m) return `<span class="badge badge-s3-${m[1]}">S3 Cat ${m[1]}</span>`;
+      return `<span class="badge badge-s3">Scope 3</span>`;
+    }
+    return `<span class="badge badge-unk">${scope}</span>`;
+  }
+
+  function fmt(n, dec = 2) {
+    if (n === null || n === undefined || isNaN(n)) return '—';
+    return parseFloat(n).toLocaleString('en-MY', {
+      minimumFractionDigits: dec,
+      maximumFractionDigits: dec,
+    });
+  }
+
+  function renderTable() {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    const slice = filteredRecords.slice(start, start + PAGE_SIZE);
+    const tbody = document.getElementById('table-body');
+
+    if (filteredRecords.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:30px;color:#475569">No records match the current filter.</td></tr>`;
+    } else {
+      tbody.innerHTML = slice.map(r => `
+        <tr>
+          <td title="${r.Source || ''}">${r.Source || '—'}</td>
+          <td title="${r.Vendor || ''}">${r.Vendor || '—'}</td>
+          <td title="${r.Description || ''}">${r.Description || '—'}</td>
+          <td>${scopeBadge(r.Scope, r.GHG_Category)}</td>
+          <td title="${r.GHG_Category || ''}">${r.GHG_Category || '—'}</td>
+          <td>${fmt(r.Qty, 2)}</td>
+          <td>${r.Unit || '—'}</td>
+          <td style="text-align:right">${fmt(r.kgCO2e, 2)}</td>
+          <td style="text-align:right">${fmt(r.tCO2e, 4)}</td>
+        </tr>
+      `).join('');
+    }
+
+    renderPagination();
+  }
+
+  function renderPagination() {
+    const total = filteredRecords.length;
+    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const start = Math.min((currentPage - 1) * PAGE_SIZE + 1, total);
+    const end   = Math.min(currentPage * PAGE_SIZE, total);
+
+    document.getElementById('pag-info').textContent =
+      total ? `Showing ${start}–${end} of ${total.toLocaleString()} records` : 'No records';
+
+    const controls = document.getElementById('pag-controls');
+    const maxBtns  = 7;
+    let btns = [];
+
+    btns.push(`<button class="pag-btn" onclick="goPage(${currentPage-1})" ${currentPage===1 ? 'disabled' : ''}>‹ Prev</button>`);
+
+    if (pages <= maxBtns) {
+      for (let p = 1; p <= pages; p++) {
+        btns.push(`<button class="pag-btn ${p===currentPage ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`);
+      }
+    } else {
+      const show = new Set([1, 2, currentPage-1, currentPage, currentPage+1, pages-1, pages].filter(p => p >= 1 && p <= pages));
+      let prev = 0;
+      [...show].sort((a,b)=>a-b).forEach(p => {
+        if (prev && p - prev > 1) btns.push('<span style="color:#475569;padding:0 4px">…</span>');
+        btns.push(`<button class="pag-btn ${p===currentPage ? 'active' : ''}" onclick="goPage(${p})">${p}</button>`);
+        prev = p;
+      });
+    }
+
+    btns.push(`<button class="pag-btn" onclick="goPage(${currentPage+1})" ${currentPage===pages ? 'disabled' : ''}>Next ›</button>`);
+    controls.innerHTML = btns.join('');
+  }
+
+  function goPage(p) {
+    const pages = Math.ceil(filteredRecords.length / PAGE_SIZE);
+    if (p < 1 || p > pages) return;
+    currentPage = p;
+    renderTable();
+    document.querySelector('.section-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function applyFilter() {
+    const filterVal = document.getElementById('scope-filter').value;
+    const searchVal = document.getElementById('vendor-search').value.toLowerCase().trim();
+
+    filteredRecords = allRecords.filter(r => {
+      let scopeMatch;
+      if (!filterVal) {
+        scopeMatch = true;
+      } else if (filterVal.includes('Cat')) {
+        // specific S3 sub-category — match on GHG_Category
+        scopeMatch = (r.GHG_Category || '') === filterVal;
+      } else {
+        scopeMatch = (r.Scope || '') === filterVal;
+      }
+      const searchMatch = !searchVal ||
+        (r.Vendor || '').toLowerCase().includes(searchVal) ||
+        (r.Description || '').toLowerCase().includes(searchVal);
+      return scopeMatch && searchMatch;
+    });
+
+    currentPage = 1;
+    renderTable();
+    document.getElementById('pag-row').style.display = filteredRecords.length ? 'flex' : 'none';
+  }
+
+  // ── Scope 3 breakdown tiles (built from donut data) ─────────────────────
+  (function () {
+    const S3_CATS = [
+      { key: 'CAT 1',  label: 'Cat 1',  sub: 'Purchased Goods',      colour: '#c084fc', cls: 'badge-s3-1',  filter: 'Scope 3 Cat 1 — Purchased Goods' },
+      { key: 'CAT 5',  label: 'Cat 5',  sub: 'Waste / Water',         colour: '#a78bfa', cls: 'badge-s3-5',  filter: 'Scope 3 Cat 5 — Waste / Water' },
+      { key: 'CAT 7',  label: 'Cat 7',  sub: 'Employee Commuting',    colour: '#818cf8', cls: 'badge-s3-7',  filter: 'Scope 3 Cat 7 — Employee Commuting' },
+      { key: 'CAT 9',  label: 'Cat 9',  sub: 'Downstream Transport',  colour: '#6ee7b7', cls: 'badge-s3-9',  filter: 'Scope 3 Cat 9 — Downstream Transport' },
+      { key: 'CAT 11', label: 'Cat 11', sub: 'Use of Sold Products',  colour: '#34d399', cls: 'badge-s3-11', filter: 'Scope 3 Cat 11 — Use of Sold Products' },
+    ];
+
+    const totals = {};
+    CHART_DATA.donut.labels.forEach((lbl, i) => {
+      const u = lbl.toUpperCase();
+      S3_CATS.forEach(c => { if (u.includes(c.key)) totals[c.key] = CHART_DATA.donut.values[i]; });
+    });
+
+    const hasAny = S3_CATS.some(c => totals[c.key] > 0);
+    const wrap = document.getElementById('s3-breakdown');
+    if (!hasAny) return;
+
+    wrap.style.display = 'grid';
+    wrap.innerHTML = S3_CATS.map(c => {
+      const val = totals[c.key] || 0;
+      return `
+        <div class="s3-tile" onclick="filterByS3('${c.filter}')" title="Click to filter table">
+          <div class="s3-tile-label" style="color:${c.colour}">${c.label}</div>
+          <div class="s3-tile-value" style="color:${c.colour}">${val.toLocaleString('en-MY', {minimumFractionDigits:1,maximumFractionDigits:1})}</div>
+          <div class="s3-tile-sub">${c.sub}</div>
+          <div class="s3-tile-sub" style="margin-top:2px">tCO₂e</div>
+        </div>`;
+    }).join('');
+  })();
+
+  function filterByS3(catValue) {
+    const sel = document.getElementById('scope-filter');
+    sel.value = catValue;
+    applyFilter();
+    document.querySelector('.section-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  fetch('/api/records')
+    .then(r => r.json())
+    .then(data => {
+      allRecords = data;
+      filteredRecords = data;
+
+      document.getElementById('table-loader').style.display = 'none';
+      document.getElementById('records-table').style.display = 'table';
+      document.getElementById('pag-row').style.display = 'flex';
+      document.getElementById('record-count-label').textContent =
+        `(${data.length.toLocaleString()} total)`;
+
+      renderTable();
+    })
+    .catch(err => {
+      document.getElementById('table-loader').innerHTML =
+        `<span style="color:#f87171">Failed to load records: ${err.message}</span>`;
+    });
+</script>
+
+</body>
+</html>

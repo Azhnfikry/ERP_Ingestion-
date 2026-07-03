@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CarbonIQ — Data Ingestion</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px;
+    }
+
+    .logo-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .logo-icon {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, #22c55e, #3b82f6);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .subtitle {
+      color: #94a3b8;
+      font-size: 0.9rem;
+      margin-bottom: 36px;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 14px;
+      padding: 32px;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #334155;
+    }
+
+    .upload-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 560px) {
+      .upload-grid { grid-template-columns: 1fr; }
+    }
+
+    .upload-slot {
+      background: #0f172a;
+      border: 2px dashed #334155;
+      border-radius: 10px;
+      padding: 18px 16px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+    }
+
+    .upload-slot:hover, .upload-slot.dragover {
+      border-color: #22c55e;
+      background: #0f2918;
+    }
+
+    .upload-slot.has-file {
+      border-color: #3b82f6;
+      border-style: solid;
+      background: #0c1a2e;
+    }
+
+    .slot-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .slot-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #e2e8f0;
+      margin-bottom: 4px;
+    }
+
+    .slot-hint {
+      font-size: 0.75rem;
+      color: #64748b;
+      font-family: 'Courier New', monospace;
+    }
+
+    .slot-icon {
+      font-size: 1.5rem;
+      margin-bottom: 6px;
+    }
+
+    .slot-file-name {
+      display: none;
+      font-size: 0.75rem;
+      color: #60a5fa;
+      margin-top: 6px;
+      word-break: break-all;
+    }
+
+    .upload-slot.has-file .slot-file-name { display: block; }
+
+    input[type="file"] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .btn-process {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+      font-size: 1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .btn-process:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    .btn-process:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .note {
+      margin-top: 12px;
+      font-size: 0.78rem;
+      color: #475569;
+      text-align: center;
+    }
+
+    /* Spinner overlay */
+    #spinner-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.65);
+      z-index: 100;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    #spinner-overlay.active { display: flex; }
+
+    .spinner {
+      width: 52px; height: 52px;
+      border: 5px solid #334155;
+      border-top-color: #22c55e;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .spinner-label {
+      color: #e2e8f0;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    /* Error banner */
+    #error-banner {
+      display: none;
+      background: #450a0a;
+      border: 1px solid #dc2626;
+      color: #fca5a5;
+      border-radius: 10px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+      width: 100%;
+      max-width: 680px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="logo-row">
+    <div class="logo-icon">♻</div>
+    <h1>CarbonIQ</h1>
+  </div>
+  <p class="subtitle">Data Ingestion — Upload SAP exports and survey data</p>
+
+  <div id="error-banner"></div>
+
+  <div class="card">
+    <p class="card-title">Upload Source Files &nbsp;·&nbsp; <span style="color:#475569;font-weight:400">All fields optional — process whatever is available</span></p>
+
+    <form id="upload-form" action="/process" method="POST" enctype="multipart/form-data">
+      <div class="upload-grid">
+
+        <div class="upload-slot" id="slot-po">
+          <input type="file" name="sap_po" accept=".xlsx,.xls" onchange="markSlot(this,'slot-po')" />
+          <div class="slot-label">File 1</div>
+          <div class="slot-icon">📦</div>
+          <div class="slot-name">SAP PO — Procurement</div>
+          <div class="slot-hint">SAP_PO_AETH_2025.xlsx</div>
+          <div class="slot-file-name" id="name-po"></div>
+        </div>
+
+        <div class="upload-slot" id="slot-fi">
+          <input type="file" name="sap_fi" accept=".xlsx,.xls" onchange="markSlot(this,'slot-fi')" />
+          <div class="slot-label">File 2</div>
+          <div class="slot-icon">💡</div>
+          <div class="slot-name">SAP FI — Utilities / Finance</div>
+          <div class="slot-hint">SAP_FI_AETH_2025.xlsx</div>
+          <div class="slot-file-name" id="name-fi"></div>
+        </div>
+
+        <div class="upload-slot" id="slot-do">
+          <input type="file" name="sap_do" accept=".xlsx,.xls" onchange="markSlot(this,'slot-do')" />
+          <div class="slot-label">File 3</div>
+          <div class="slot-icon">🚚</div>
+          <div class="slot-name">SAP DO — Delivery Orders</div>
+          <div class="slot-hint">SAP_DO_AETH_2025.xlsx</div>
+          <div class="slot-file-name" id="name-do"></div>
+        </div>
+
+        <div class="upload-slot" id="slot-commuting">
+          <input type="file" name="commuting" accept=".xlsx,.xls" onchange="markSlot(this,'slot-commuting')" />
+          <div class="slot-label">File 4</div>
+          <div class="slot-icon">🧑‍💼</div>
+          <div class="slot-name">Employee Commuting Survey</div>
+          <div class="slot-hint">AETH_Commuting_Survey_2025.xlsx</div>
+          <div class="slot-file-name" id="name-commuting"></div>
+        </div>
+
+      </div>
+
+      <button type="button" class="btn-process" id="process-btn" onclick="submitForm()">
+        ⚡ Process &amp; Classify
+      </button>
+      <p class="note">Upload at least one file to begin classification.</p>
+    </form>
+  </div>
+
+  <div id="spinner-overlay">
+    <div class="spinner"></div>
+    <div class="spinner-label">Classifying emissions… please wait</div>
+  </div>
+
+  <script>
+    function markSlot(input, slotId) {
+      const slot = document.getElementById(slotId);
+      const nameEl = document.getElementById('name-' + slotId.replace('slot-', ''));
+      if (input.files.length > 0) {
+        slot.classList.add('has-file');
+        nameEl.textContent = '✓ ' + input.files[0].name;
+      } else {
+        slot.classList.remove('has-file');
+        nameEl.textContent = '';
+      }
+    }
+
+    function showError(msg) {
+      const banner = document.getElementById('error-banner');
+      banner.textContent = '⚠ ' + msg;
+      banner.style.display = 'block';
+      window.scrollTo(0, 0);
+    }
+
+    async function submitForm() {
+      const form   = document.getElementById('upload-form');
+      const inputs = form.querySelectorAll('input[type="file"]');
+      const hasFile = Array.from(inputs).some(i => i.files.length > 0);
+
+      if (!hasFile) {
+        showError('Please upload at least one file before processing.');
+        return;
+      }
+
+      document.getElementById('error-banner').style.display = 'none';
+      document.getElementById('spinner-overlay').classList.add('active');
+      document.getElementById('process-btn').disabled = true;
+
+      const formData = new FormData(form);
+
+      try {
+        const resp = await fetch('/process', { method: 'POST', body: formData });
+
+        if (resp.redirected) {
+          window.location.href = resp.url;
+          return;
+        }
+
+        // Non-redirect means error JSON
+        const data = await resp.json().catch(() => ({ error: 'Unknown server error.' }));
+        document.getElementById('spinner-overlay').classList.remove('active');
+        document.getElementById('process-btn').disabled = false;
+        showError(data.error || 'Processing failed.');
+      } catch (err) {
+        document.getElementById('spinner-overlay').classList.remove('active');
+        document.getElementById('process-btn').disabled = false;
+        showError('Network error: ' + err.message);
+      }
+    }
+  </script>
+
+</body>
+</html>
