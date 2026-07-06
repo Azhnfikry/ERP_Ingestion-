@@ -540,7 +540,7 @@ def load_session(sid):
     conn.close()
     if not row:
         return None
-    df = pd.read_json(row[0], orient="records")
+    df = pd.read_json(io.StringIO(row[0]), orient="records")
     for col in OUTPUT_COLS:
         if col not in df.columns:
             df[col] = None
