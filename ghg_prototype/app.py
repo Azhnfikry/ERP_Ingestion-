@@ -69,16 +69,9 @@ def _init_db():
 
 
 def _save_to_db(sid, df):
-    conn = _get_db()
-    cur = conn.cursor()
+    rows = []
     for _, r in df.iterrows():
-        cur.execute("""
-            INSERT INTO ghg_emissions
-                (session_id, source, doc_ref, date, vendor, description,
-                 scope, ghg_category, qty, unit, ef_val, kg_co2e, t_co2e,
-                 spend_myr, plant)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        """, (
+        rows.append((
             sid,
             r.get("Source"), r.get("Doc_Ref"), str(r.get("Date") or ""),
             r.get("Vendor"), r.get("Description"), r.get("Scope"),
@@ -91,6 +84,25 @@ def _save_to_db(sid, df):
             float(r["Spend_MYR"]) if r.get("Spend_MYR") is not None else None,
             r.get("Plant"),
         ))
+
+    if not rows:
+        return
+
+    conn = _get_db()
+    cur = conn.cursor()
+    row_placeholder = "(" + ",".join(["%s"] * 15) + ")"
+    CHUNK = 500
+    for i in range(0, len(rows), CHUNK):
+        batch = rows[i:i + CHUNK]
+        values_sql = ",".join([row_placeholder] * len(batch))
+        flat_params = [v for row in batch for v in row]
+        cur.execute(f"""
+            INSERT INTO ghg_emissions
+                (session_id, source, doc_ref, date, vendor, description,
+                 scope, ghg_category, qty, unit, ef_val, kg_co2e, t_co2e,
+                 spend_myr, plant)
+            VALUES {values_sql}
+        """, flat_params)
     conn.commit()
     conn.close()
 
