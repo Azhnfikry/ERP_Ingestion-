@@ -715,7 +715,7 @@ def api_records():
     df["Qty"]       = df["Qty"].fillna(0)
     df["EF_val"]    = df["EF_val"].fillna(0)
 
-    records = df.where(pd.notna(df), None).to_dict(orient="records")
+    records = df.astype(object).where(pd.notna(df), None).to_dict(orient="records")
     return jsonify(records)
 
 
